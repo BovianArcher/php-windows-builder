@@ -3,10 +3,10 @@ name: Build PHP for Windows
 on:
   push:
     branches:
-      - main  # This triggers the workflow when you push to the main branch
+      - master  # This triggers the workflow when you push to the master branch
   pull_request:
     branches:
-      - main  # This triggers the workflow when there is a pull request to the main branch
+      - master  # This triggers the workflow when there is a pull request to the master branch
 
 jobs:
   build:
