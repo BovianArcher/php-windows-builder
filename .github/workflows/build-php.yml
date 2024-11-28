@@ -1,0 +1,47 @@
+name: Build PHP for Windows
+
+on:
+  push:
+    branches:
+      - main  # This triggers the workflow when you push to the main branch
+  pull_request:
+    branches:
+      - main  # This triggers the workflow when there is a pull request to the main branch
+
+jobs:
+  build:
+    runs-on: windows-latest  # Use the latest Windows environment
+    strategy:
+      matrix:
+        arch: [x64, x86]  # Architecture (64-bit and 32-bit)
+        ts: [nts, ts]     # Thread safety (Non-thread safe or Thread safe)
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4  # Checkout the repository code
+
+      - name: Set up PHP build environment
+        uses: php/php-windows-builder/php@v1  # Use the php-windows-builder action
+        with:
+          php-version: '8.4.1'  # Set PHP version
+          arch: ${{ matrix.arch }}  # Set architecture from matrix (x64 or x86)
+          ts: ${{ matrix.ts }}     # Set thread safety from matrix (nts or ts)
+
+      - name: Build PHP
+        run: |
+          # Build PHP from source using the configured environment
+          mkdir build
+          cd build
+          ../../php-src/configure --enable-cli --disable-cgi --with-zlib --prefix=$PWD
+          nmake  # Use nmake to build PHP
+          
+      - name: Test PHP Build
+        run: |
+          # Verify the PHP build by running php.exe
+          .\build\php.exe -v  # Check PHP version to ensure it's built correctly
+
+      - name: Upload PHP Build Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: php-build
+          path: build/php.exe  # Upload the php.exe as artifact
