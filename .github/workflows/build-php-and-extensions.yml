@@ -1,0 +1,94 @@
+name: Build PHP and Extensions
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-php:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        php-version: [8.4.1] # Specify PHP versions
+        arch: [x64]          # Architecture: x64 or x86
+        ts: [nts, ts]        # Thread safety: nts (non-thread-safe), ts (thread-safe)
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build PHP
+        uses: php/php-windows-builder/php@v1
+        with:
+          php-version: ${{ matrix.php-version }}
+          arch: ${{ matrix.arch }}
+          ts: ${{ matrix.ts }}
+
+      - name: Upload PHP build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: php-build-${{ matrix.php-version }}-${{ matrix.arch }}-${{ matrix.ts }}
+          path: ./release # Specify the path where PHP build artifacts are stored
+
+  get-extension-matrix:
+    runs-on: ubuntu-latest
+    needs: build-php
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get the extension matrix
+        id: extension-matrix
+        uses: php/php-windows-builder/extension-matrix@v1
+        with:
+          extension-url: https://github.com/xdebug/xdebug
+          extension-ref: '3.3.2'
+          php-version-list: '8.4.1, 8.3'
+          arch-list: 'x64, x86'
+          ts-list: 'nts, ts'
+
+  build-extensions:
+    needs: get-extension-matrix
+    runs-on: windows-latest
+    strategy:
+      matrix: ${{ fromJson(needs.get-extension-matrix.outputs.matrix) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build the extension
+        uses: php/php-windows-builder/extension@v1
+        with:
+          extension-url: https://github.com/xdebug/xdebug
+          extension-ref: '3.3.2'
+          php-version: ${{ matrix.php-version }}
+          arch: ${{ matrix.arch }}
+          ts: ${{ matrix.ts }}
+          args: --with-xdebug
+          libs: zlib
+
+      - name: Upload extension build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: xdebug-build-${{ matrix.php-version }}-${{ matrix.arch }}-${{ matrix.ts }}
+          path: ./release # Specify the path where extension build artifacts are stored
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build-php, build-extensions]
+    if: ${{ github.event_name == 'release' }}
+    steps:
+      - name: Upload all artifacts to release
+        uses: actions/upload-artifact@v3
+        with:
+          name: complete-build
+          path: ./release # Ensure this directory contains all PHP and extension builds
