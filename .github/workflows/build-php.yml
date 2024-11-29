@@ -13,8 +13,8 @@ jobs:
     runs-on: windows-latest  # Use the latest Windows environment
     strategy:
       matrix:
-        arch: [x64, x86]  # Architecture (64-bit and 32-bit)
-        ts: [nts, ts]     # Thread safety (Non-thread safe or Thread safe)
+        arch: [x64]  # Architecture (64-bit and 32-bit)
+        ts: [nts]     # Thread safety (Non-thread safe or Thread safe)
 
     steps:
       - name: Checkout repository
