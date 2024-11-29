@@ -1,76 +1,136 @@
-name: Build PHP and Extensions
+name: Build PHP
+run-name: Build PHP ${{ inputs.php-version }}
 
 on:
-  push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - master
   workflow_dispatch:
-
-permissions:
-  contents: write
+    inputs:
+      php-version:
+        description: 'PHP version to build'
+        required: true
 
 jobs:
-  setup-environment:
-    runs-on: windows-latest
-    steps:
-      - name: Install Visual Studio Build Tools
-        run: |
-          choco install visualstudio2022buildtools --params "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --quiet --norestart"
-          refreshenv
-      - name: Verify Visual Studio Installation
-        run: |
-          dir "C:\Program Files (x86)\Microsoft Visual Studio\*" /b
-
-  build-php:
-    needs: setup-environment
-    runs-on: windows-latest
+  php:
+    runs-on: ${{ startsWith(inputs.php-version, '8.4') && 'windows-2022' || 'windows-2019' }}
     strategy:
       matrix:
-        php-version: [8.3.2] # Use a valid PHP version
-        arch: [x64]          # Only x64 architecture
-        ts: [nts]            # Only Not Thread Safe (nts)
-
+        arch: [x64]  # Only x64 architecture
+        ts: [nts]    # Only Not Thread Safe (nts)
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Build PHP
-        uses: php/php-windows-builder/php@v1
+        uses: ./php
         with:
-          php-version: ${{ matrix.php-version }}
+          php-version: ${{ github.event.inputs.php-version }}
           arch: ${{ matrix.arch }}
           ts: ${{ matrix.ts }}
 
-      - name: Upload PHP build artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: php-build-${{ matrix.php-version }}-${{ matrix.arch }}-${{ matrix.ts }}
-          path: ./release # Path where PHP build artifacts are stored
-
-  build-extension:
-    needs: build-php
-    runs-on: windows-latest
-
+  artifacts:
+    runs-on: ubuntu-latest
+    needs: php
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Build the extension
-        uses: php/php-windows-builder/extension@v1
-        with:
-          extension-url: https://github.com/xdebug/xdebug
-          extension-ref: '3.3.2'
-          php-version: '8.3.2' # Match the PHP version with the PHP build job
-          arch: x64            # Only x64 architecture
-          ts: nts              # Only Not Thread Safe (nts)
-          args: --with-xdebug
-          libs: zlib
-
-      - name: Upload extension build artifacts
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: xdebug-build-${{ matrix.php-version }}-${{ matrix.arch }}-${{ matrix.ts }}
-          path: ./release # Path where extension build artifacts are stored
+          name: php-build-${{ needs.php.outputs.php-version }}-${{ matrix.arch }}-${{ matrix.ts }}
+          path: ./release  # Path where PHP build artifacts are stored
+name: Build PHP Extension
+run-name: Build PHP Extension ${{ inputs.extension-url }}, ${{ inputs.extension-ref }}
+on:
+  workflow_dispatch:
+    inputs:
+      extension-url:
+        description: 'Extension URL'
+        required: true
+      extension-ref:
+        description: 'Extension ref'
+        required: true
+      php-version-list:
+        description: 'PHP versions to build'
+        required: false
+      arch-list:
+        type: choice
+        options: ['x64', 'x86', 'x64,x86']
+        description: 'Architectures to build'
+        required: false
+        default: 'x64,x86'
+      ts-list:
+        type: choice
+        options: ['nts', 'ts', 'nts,ts']
+        description: 'Thread safety to build'
+        required: false
+        default: 'nts,ts'
+      args:
+        description: 'Configure arguments'
+        required: false
+      libs:
+        description: 'Libraries'
+        required: false
+      run-tests:
+        type: choice
+        options: ['true', 'false']
+        description: 'Run tests after building the extension'
+        required: false
+        default: 'false'
+      test-runner:
+        description: 'Test runner to use'
+        required: false
+        default: 'run-tests.php'
+      test-opcache-mode:
+        type: choice
+        options: ['on', 'off', 'both']
+        description: 'Test opcache mode'
+        required: false
+        default: 'on'
+jobs:
+  get-extension-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.extension-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Get the extension matrix
+        id: extension-matrix
+        uses: ./extension-matrix
+        with:
+          extension-url: ${{ inputs.extension-url }}
+          extension-ref: ${{ inputs.extension-ref }}
+          php-version-list: ${{ inputs.php-version-list }}
+          arch-list: ${{ inputs.arch-list }}
+          ts-list: ${{ inputs.ts-list }}
+
+  extension:
+    needs: get-extension-matrix
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.get-extension-matrix.outputs.matrix)}}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build the extension
+        uses: ./extension
+        with:
+          extension-url: ${{ inputs.extension-url }}
+          extension-ref: ${{ inputs.extension-ref }}
+          php-version: ${{ matrix.php-version }}
+          arch: ${{ matrix.arch }}
+          ts: ${{ matrix.ts }}
+          args: ${{ inputs.args }}
+          libs: ${{ inputs.libs }}
+          run-tests: ${{ inputs.run-tests }}
+          test-runner: ${{ inputs.test-runner }}
+          test-opcache-mode: ${{ inputs.test-opcache-mode }}
+          build-directory: C:\build
+
+  artifacts:
+    runs-on: ubuntu-latest
+    needs: extension
+    steps:
+      - name: Upload artifacts
+        uses: actions/upload-artifact/merge@v4
+        with:
+          name: artifacts
+          delete-merged: true
