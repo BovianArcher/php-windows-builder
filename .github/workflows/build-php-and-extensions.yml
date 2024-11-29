@@ -17,7 +17,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        php-version: [8.4.1] # Specify the PHP version
+        php-version: [8.3.2] # Use a valid PHP version
         arch: [x64]          # Only x64 architecture
         ts: [nts]            # Only Not Thread Safe (nts)
 
@@ -36,7 +36,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: php-build-${{ matrix.php-version }}-${{ matrix.arch }}-${{ matrix.ts }}
-          path: ./release # Specify the path where PHP build artifacts are stored
+          path: ./release # Path where PHP build artifacts are stored
 
   build-extension:
     needs: build-php
@@ -51,7 +51,7 @@ jobs:
         with:
           extension-url: https://github.com/xdebug/xdebug
           extension-ref: '3.3.2'
-          php-version: '8.4.1' # Match the PHP version
+          php-version: '8.3.2' # Match the PHP version with the PHP build job
           arch: x64            # Only x64 architecture
           ts: nts              # Only Not Thread Safe (nts)
           args: --with-xdebug
@@ -61,4 +61,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: xdebug-build-${{ matrix.php-version }}-${{ matrix.arch }}-${{ matrix.ts }}
-          path: ./release # Specify the path where extension build artifacts are stored
+          path: ./release # Path where extension build artifacts are stored
