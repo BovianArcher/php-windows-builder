@@ -13,7 +13,19 @@ permissions:
   contents: write
 
 jobs:
+  setup-environment:
+    runs-on: windows-latest
+    steps:
+      - name: Install Visual Studio Build Tools
+        run: |
+          choco install visualstudio2022buildtools --params "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --quiet --norestart"
+          refreshenv
+      - name: Verify Visual Studio Installation
+        run: |
+          dir "C:\Program Files (x86)\Microsoft Visual Studio\*" /b
+
   build-php:
+    needs: setup-environment
     runs-on: windows-latest
     strategy:
       matrix:
